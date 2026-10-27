@@ -72,15 +72,64 @@ flowchart LR
 
 #### 浏览器自动化的技术实现
 
-工作台网页通过 FastAPI 接口提交上架请求；后端先校验商品表字段、本地图片、账号状态及重复任务，再在 SQLite 中建立与账号键关联的发布队列。执行器调用 [`browser_gateway.py`](browser_gateway.py) 中的 `BrowserGateway`，在已登录的 Chrome 页面上完成操作：
+核心浏览器能力来自 Google Chrome DevTools 团队的开源项目 [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp)。它是由本机 `npx` 启动的 **MCP Server 进程**，不是托管在 Google 云端、需要申请凭据的服务。项目自己的 [`browser_gateway.py`](browser_gateway.py) 是 **Python MCP Client**：通过标准输入/输出与该进程通信，调用浏览器工具；Chrome DevTools MCP 再连接工作人员已经打开并登录的 Chrome。工作台页面经 FastAPI 发起操作，商品、任务和结果保存在 SQLite。
 
-1. **建立长时控制通道**：Python 的 MCP Client 通过 stdio 启动并连接 `chrome-devtools-mcp`，`--autoConnect` 接入现有 Chrome。网关持有 `ClientSession`、页面 ID 和账号状态，多个任务复用同一连接，避免每一步重新授权。
-2. **发现账号与页面**：调用 `list_pages` 查找 Facebook 标签页，再用 `take_snapshot` 读取页面可见结构；从个人资料菜单识别账号名称与头像，更新工作台的在线状态。
-3. **驱动上架表单**：调用 `navigate_page` 打开新建商品 URL；根据最新页面快照中的控件名称与 `uid` 定位字段，使用 `upload_file` 上传图片、`fill_form` / `fill` 填文字、`click` 选择分类和成色。地点输入使用 `press_key` 清除原值、`type_text` 输入目标地点，再从建议中选择美国加州洛杉矶。
-4. **逐步校验与提交**：每个关键步骤后重新读取 `take_snapshot`，核对图片、标题、价格、地点和描述；检查 Facebook 的表单错误与 `Next` 状态，然后点击 `Next`、`Publish`。提交后读取页面跳转、商品详情链接或销售列表中的对应商品，更新任务状态。
-5. **任务隔离与恢复**：[`app.py`](app.py) 顺序执行选中的商品；前一件受阻就暂停后续任务。点击发布后若无法确认结果，记录“待核实”；服务重启时不会自动重发正在执行的任务。
+```mermaid
+flowchart LR
+    A[工作台网页] --> B[FastAPI 后端 / 发布队列]
+    B --> C[BrowserGateway：Python MCP Client]
+    C <-->|MCP stdio / call_tool| D[chrome-devtools-mcp：本机子进程]
+    D <-->|Chrome 远程调试连接| E[已登录的 Chrome]
+    E --> F[Facebook Marketplace 网页]
+```
 
-这套实现通过**浏览器页面结构与用户界面操作**完成上架。它不读取 Chrome Cookie、不保存 Facebook 密码，也不依赖个人 Marketplace 发布接口。页面结构变化时，控件定位和结果识别需要随之维护。
+**MCP Client 怎样启动和连接 Server？** [`BrowserGateway._connect`](browser_gateway.py) 用 Python MCP SDK 的 `StdioServerParameters` 声明启动命令，`stdio_client` 建立双向 stdio 通道，`ClientSession.initialize()` 完成 MCP 握手。关键代码如下，参数与仓库实现一致：
+
+```python
+server = StdioServerParameters(
+    command=shutil.which("npx.cmd") or shutil.which("npx"),
+    args=[
+        "-y", "chrome-devtools-mcp@1.12.0", "--autoConnect",
+        "--no-usage-statistics", "--no-performance-crux",
+        f"--workspace={PROJECT_DIR}",
+    ],
+    cwd=PROJECT_DIR,
+)
+read, write = await stack.enter_async_context(stdio_client(server))
+session = await stack.enter_async_context(
+    ClientSession(read, write, read_timeout_seconds=timedelta(seconds=90))
+)
+await session.initialize()
+# 后续通过 await session.call_tool("list_pages", {}) 等调用工具。
+```
+
+| 启动参数 | 在本项目中的作用 |
+| --- | --- |
+| `npx.cmd` / `npx` 与 `-y` | 在 Windows 优先定位 `npx.cmd`；`-y` 允许 `npx` 无交互安装/运行指定包。首次启动需要 Node.js 与 npm 包下载能力。 |
+| `chrome-devtools-mcp@1.12.0` | 固定 MCP Server 版本，避免每次启动自动采用新版本导致工具行为变化。 |
+| `--autoConnect` | 自动连接本机已运行的 Chrome（官方要求 Chrome 144+，默认稳定版资料目录），复用工作人员的登录状态；这里没有启用 `--isolated` 或另起浏览器资料目录。 |
+| `--no-usage-statistics`、`--no-performance-crux` | 分别关闭 MCP 使用统计和性能追踪中的 CrUX 查询；不影响页面操作。 |
+| `--workspace={PROJECT_DIR}`、`cwd=PROJECT_DIR` | 将 Server 的本地文件工具访问范围设为项目目录，并以项目目录为工作目录；上传图片使用该目录内的商品图片。 |
+| `read_timeout_seconds=90` | MCP 会话和单次工具调用的读取超时，防止浏览器长期无响应。 |
+
+按照 [Google 官方自动连接说明](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md#automatically-connecting-to-a-running-chrome-instance)，先在 Chrome 144+ 打开 `chrome://inspect/#remote-debugging` 启用远程调试，再保持 Facebook 登录，点击工作台“连接当前 Chrome”。浏览器出现调试连接提示时，由工作人员点击“允许”。MCP 的 `initialize()` 只建立 Client/Server 会话；首次 `list_pages` 等浏览器工具调用才实际尝试发现 Chrome 和读取页面。网关把 `ClientSession` 保存在长时任务中，后续刷新账号、上架和会话操作复用连接；服务或 Chrome 重启后可能再次要求授权。项目按 [官方参数文档](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/configuration.md)配置 Server，不要求用户另写一份通用 MCP 客户端 JSON 配置。
+
+**项目实际调用的 Chrome DevTools MCP tools**（详见 [官方工具参考](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/tool-reference.md)）：
+
+| Tool | 项目里的具体用途 |
+| --- | --- |
+| `list_pages` | 列出浏览器标签页及其 `pageId` / URL，找到 Facebook 页面，并在提交后检查页面跳转。它本身不返回 DOM 或网络请求。 |
+| `take_snapshot` | 读取当前页的可访问性树文本（a11y tree），取得控件名称、提示文字和当前快照的 `uid`；每次页面变化后重新读取，再定位下一步控件。 |
+| `evaluate_script` | 在账号识别时做少量页面 DOM 读取，提取个人资料菜单中的头像地址；上架表单主流程使用页面快照与控件操作。 |
+| `navigate_page` | 将已选中的 Chrome 标签页导航到 Marketplace 新建商品、卖家列表或会话页面。 |
+| `upload_file` | 将本地关联的商品图片上传到页面的文件控件。 |
+| `fill_form` / `fill` | 填写标题、价格、描述、会话回复等输入框。 |
+| `click` | 打开账号菜单、选择分类/成色/地点建议、点击 `Next` 和 `Publish`，或打开会话并确认发送。 |
+| `press_key` / `type_text` | 清除地点字段旧内容并输入 `Los Angeles, CA`，随后选择正确的美国地点建议。 |
+
+例如自动上架时，执行器先 `navigate_page` 打开创建页，再 `take_snapshot` 获取图片输入框的 `uid`，用 `upload_file` 上传图片；下一次快照重新取得标题、价格等控件的 `uid`，调用 `fill_form`。分类、成色和地点也是“读取最新快照 → 找到控件 → 点击/输入 → 再验证”的循环。检测到 `Please enter a valid description`、`Limit reached` 等页面提示时，将具体原因写回发布队列。点击 `Publish` 后再通过页面跳转、商品链接或卖家列表核对提交结果；无法确认则标记待核实，不自动重试。会话读取和人工确认发送复用同一套页面导航、快照与输入工具。
+
+这套实现通过**页面可见结构和用户界面操作**完成任务。当前代码没有调用 `list_network_requests` / `get_network_request`，没有拦截、重放 Facebook 私有接口请求，也不读取 Cookie 或保存 Facebook 密码。页面结构变化时，控件定位和结果识别需要维护。仓库另有可选的 [`mcp_server.py`](mcp_server.py)，它向外部 Agent 提供本地商品/草稿工具；与这里负责控制 Chrome 的 **Google Chrome DevTools MCP Server** 是两个不同角色。
 
 ### 买家会话与 AI 辅助询盘回答 Agent
 
