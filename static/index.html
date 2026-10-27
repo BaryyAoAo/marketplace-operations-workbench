@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marketplace 运营工作台</title>
+  <link rel="stylesheet" href="/styles.css?v=0.3.42">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">M</span><span>MARKETPLACE<br><small>OPERATIONS STUDIO</small></span></div>
+      <p class="side-label">功能模块</p>
+      <nav aria-label="功能模块">
+        <a href="/" class="nav-item active" data-route="listing">上架工作台</a>
+        <a href="/inbox" class="nav-item" data-route="inbox">买家会话</a>
+        <a href="/ai-settings" class="nav-item" data-route="ai">AI 模型设置</a>
+      </nav>
+      <div class="sidebar-foot"><span class="live-dot"></span> LOCAL WORKBENCH <span class="side-version">v0.3.42</span></div>
+    </aside>
+
+    <main class="content">
+      <section id="overview" class="hero" data-page="listing">
+        <div class="eyebrow">MARKETPLACE OPERATIONS / LOCAL WORKBENCH</div>
+        <h1>从商品表到账号，<br><em>再到自动上架。</em></h1>
+        <p>连接已登录浏览器，导入商品资料并集中处理上架任务；买家会话可在左侧单独查看。</p>
+        <div class="hero-actions"><div id="hero-connection" class="hero-connection" role="status"><span class="connection-dot"></span><span id="hero-connection-label">正在检查 Chrome 连接</span></div><div class="account-toolbar"><button id="refresh-account" class="button small secondary">刷新状态</button><button id="disconnect-browser" class="button small warn hidden">断开连接</button></div><button id="connect-browser" class="button primary hidden">连接当前 Chrome <span>↗</span></button><span id="hero-connection-hint">当前支持 Chrome 默认资料目录的单账号验证</span></div>
+        <div class="hero-shape shape-one"></div><div class="hero-shape shape-two"></div>
+      </section>
+
+      <section id="accounts" class="panel-section account-section" data-page="listing">
+        <div class="section-head"><div><span class="section-kicker">01 / ACCOUNT CONNECTION</span><h2>请勾选要操作的 Facebook 账号</h2><p>账号信息来自已登录的 Facebook 页面。</p></div><span class="section-icon">◎</span></div>
+        <div class="account-panel"><div id="account-connection-detail" class="account-panel-top"><div><strong id="browser-state">正在检查 Chrome 状态</strong><p id="browser-detail">请稍候，正在读取浏览器连接。</p></div></div><div class="account-selection-bar"><span>账号列表</span><button id="select-all-accounts" class="button small secondary" disabled>全选账号</button></div><div id="account-select" class="account-grid"><div class="account-empty">正在获取已登录账号…</div></div></div>
+      </section>
+
+      <section class="metrics listing-metrics" aria-label="工作台统计" data-page="listing">
+        <article class="metric"><span>商品资料</span><strong id="metric-products">0</strong><small>当前可操作 SKU</small></article>
+        <article class="metric"><span>待审草稿</span><strong id="metric-drafts">0</strong><small>需要人工确认</small></article>
+        <article class="metric"><span>发布任务</span><strong id="metric-tasks">0</strong><small>网页队列与人工回填</small></article>
+      </section>
+
+      <section id="products" class="panel-section" data-page="listing">
+        <div class="section-head"><div><span class="section-kicker">02 / PRODUCT SOURCE</span><h2>商品资料</h2><p>导入工作人员准备好的商品事实、标题和描述；价格与规格由表格控制。</p></div><span class="section-icon">◇</span></div>
+        <div class="import-bar"><div><strong>导入 CSV / Excel 商品表</strong><p>按样例表填写英文商品资料和 USD 价格；新增 SKU 会追加，重复 SKU 会跳过。</p></div><div class="import-actions"><a class="button secondary" href="/api/products/template" data-download="template" data-loading-label="下载中…">下载商品样例表</a><label class="button secondary file-button">选择商品表 <input id="csv-file" type="file" accept=".csv,.xlsx,text/csv" hidden></label><button id="clear-products" class="button warn" type="button">清空当前商品表</button></div></div>
+        <div class="import-bar image-import"><div><strong>导入商品图片</strong><p>可一次选择多张图片；文件名以 SKU 开头时自动匹配商品。也可在每个商品行单独选择图片。</p></div><label class="button secondary file-button">批量选择图片 <input id="product-images" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div>
+        <div id="import-report" class="report hidden"></div>
+        <div class="table-wrap"><table><thead><tr><th>选择</th><th>商品 / SKU</th><th>资料</th><th>价格</th><th>库存</th><th>图片 / 操作</th></tr></thead><tbody id="product-rows"></tbody></table></div>
+        <div id="draft-panel" class="detail-card hidden"></div>
+      </section>
+
+      <section id="queue" class="panel-section" data-page="listing">
+        <div class="section-head"><div><span class="section-kicker">03 / PUBLISH CONTROL</span><h2>发布队列</h2><p>逐件填写当前 Chrome 的 Marketplace 表单并核验结果；平台上架限制或页面异常会暂停队列。</p></div><span class="section-icon">↗</span></div>
+        <div class="import-bar"><div><strong>选中商品与在线账号后开始</strong><p>商品需有本地图片、标题和描述。工作台会按顺序尝试发布；Facebook 返回的限制或失败原因会显示在任务中。</p></div><button id="start-batch" class="button primary">开始自动化上架</button></div>
+        <div id="task-list" class="publish-task-list"></div>
+      </section>
+
+      <section id="live-inbox" class="panel-section" data-page="inbox">
+        <div class="section-head"><div><span class="section-kicker">MARKETPLACE INBOX</span><h2>Marketplace 会话</h2><p>点击已识别的在线账号，读取该账号当前可见的会话。感叹号表示工作台检测到尚未标记处理的入站摘要，并非 Facebook 官方未读状态。</p><p id="inbox-account-state" class="inbox-account-state">正在读取 Chrome 账号状态…</p></div><div class="inbox-header-actions"><div id="inbox-summary" class="inbox-summary hidden">待处理会话 <strong id="metric-inquiries">0</strong></div><button id="refresh-conversations" class="button secondary" data-loading-label="刷新中…">刷新当前账号会话</button></div></div>
+        <div id="inbox-account-check" class="inbox-syncing hidden" role="status"><span class="loading-spinner" aria-hidden="true"></span>正在核对当前在线账号…</div>
+        <div class="inbox-layout"><div class="inbox-column"><h3>Facebook 账号</h3><div id="live-account-list" class="inbox-account-list"><div class="empty">正在读取账号…</div></div></div><div class="inbox-column"><h3>该账号的会话</h3><div id="live-conversation-list" class="inbox-list"><div class="empty">先选择账号。</div></div></div><div class="inbox-column"><h3>对话内容</h3><div id="live-thread" class="detail-card inbox-thread"><div class="empty">选择一条会话查看历史。</div></div></div></div>
+      </section>
+
+      <section id="ai-settings" class="panel-section ai-settings-page" data-page="ai">
+        <div class="section-head"><div><span class="section-kicker">AI REPLY SETTINGS</span><h2>AI 模型设置</h2><p>配置模型连接与客服知识。生成结果只作为草稿，由工作人员核对并发送。</p></div></div>
+        <div class="ai-settings-card">
+          <div class="ai-card-heading"><h3>模型连接</h3><p>保存后立即生效；API Key 不会回传到页面。</p></div>
+          <div class="ai-settings-status"><span id="ai-settings-indicator" class="ai-indicator">读取中</span><span id="ai-settings-detail">正在读取当前模型配置…</span></div>
+          <form id="ai-settings-form" autocomplete="off">
+            <div class="ai-settings-grid">
+              <div class="field"><label for="ai-provider">服务类型</label><select id="ai-provider" required><option value="siliconflow">硅基流动 · Chat Completions</option><option value="compatible">其他兼容接口 · Chat Completions</option><option value="openai">OpenAI · Responses</option></select></div>
+              <div class="field"><label for="ai-model">模型 ID</label><input id="ai-model" type="text" maxlength="200" placeholder="deepseek-ai/DeepSeek-V4.1-Flash" required></div>
+              <div class="field ai-wide"><label for="ai-base-url">API Base URL</label><input id="ai-base-url" type="url" maxlength="500" placeholder="https://api.siliconflow.cn/v1" required><small>填写到 /v1 的基础地址，不要填写 /chat/completions。仅本机地址允许 HTTP。</small></div>
+              <div class="field ai-wide"><label for="ai-api-key">API Key</label><input id="ai-api-key" type="password" maxlength="1000" autocomplete="new-password" placeholder="留空表示保留当前密钥"><small id="ai-key-hint">密钥不会回传到网页；更换服务类型或 URL 时请重新输入。</small></div>
+              <div class="field ai-wide"><label for="ai-system-prompt">买家回复 System Prompt</label><textarea id="ai-system-prompt" maxlength="6000"></textarea><small>已预填默认提示词，可按业务需要修改；留空会使用默认提示词。生成时还会附加固定的商品事实、JSON 格式和防编造要求。</small></div>
+            </div>
+            <div class="ai-settings-actions"><button id="save-ai-settings" class="button primary" type="submit" data-loading-label="保存中…">保存设置</button><button id="reset-ai-settings" class="button secondary" type="button" data-loading-label="重置中…">恢复环境变量配置</button></div>
+          </form>
+        </div>
+        <div class="ai-settings-card ai-knowledge-card">
+          <div class="ai-card-heading"><h3>客服知识</h3><p>已填入通用经营规则和常见话术，可按实际业务直接修改并保存。当前规则适用于所有连接账号。</p><small id="ai-knowledge-version">正在读取…</small></div>
+          <form id="ai-knowledge-form">
+            <h4>经营规则</h4>
+            <div class="ai-policy-grid">
+              <div class="field"><label for="ai-policy-shipping">配送 / 邮寄</label><textarea id="ai-policy-shipping" maxlength="1200" placeholder="例如：是否提供邮寄、可配送区域与费用；未确认请留空。"></textarea></div>
+              <div class="field"><label for="ai-policy-pickup">面交 / 自提</label><textarea id="ai-policy-pickup" maxlength="1200" placeholder="例如：允许面交的区域与预约要求；未确认请留空。"></textarea></div>
+              <div class="field"><label for="ai-policy-payment">付款方式</label><textarea id="ai-policy-payment" maxlength="1200" placeholder="仅填写已确认可接受的方式。"></textarea></div>
+              <div class="field"><label for="ai-policy-returns">退换规则</label><textarea id="ai-policy-returns" maxlength="1200" placeholder="例如：是否接受退换、适用条件；未确认请留空。"></textarea></div>
+              <div class="field ai-policy-wide"><label for="ai-policy-negotiation">议价规则</label><textarea id="ai-policy-negotiation" maxlength="1200" placeholder="只写可以对买家公开的议价口径；不要填写内部最低价。"></textarea></div>
+            </div>
+            <div class="ai-quick-heading"><div><h4>常见话术</h4><p>按问题类型提供直接答复的句式。可用 {product_name}、{price}、{stock}、{availability}、{size} 引用商品表字段；缺少的字段不会用于草稿。</p></div><button id="add-quick-reply" class="button small secondary" type="button">添加话术</button></div>
+            <div id="ai-quick-replies" class="ai-quick-replies"><div class="empty">尚未添加参考话术。</div></div>
+            <div class="ai-settings-actions"><button id="save-ai-knowledge" class="button primary" type="submit" data-loading-label="保存中…">保存客服知识</button></div>
+          </form>
+        </div>
+      </section>
+
+      <section id="inquiries" class="panel-section hidden">
+        <div class="section-head"><div><span class="section-kicker">05 / MANUAL FOLLOWUP</span><h2>手工跟进记录</h2><p>原有的离线询盘记录保留作历史和异常时的人工补录。</p></div><span class="section-icon">✦</span></div>
+        <div class="form-card"><div><strong>录入模拟询盘</strong><p>使用买家代号，不填写真实联系方式。</p></div><form id="inquiry-form" class="inquiry-form"><select id="inquiry-task" required></select><input id="buyer-alias" placeholder="买家代号，如 buyer-01" maxlength="80" required><input id="question" placeholder="买家问题，如 Is size US 7 available?" maxlength="1000" required><button class="button primary" type="submit">生成回复草稿</button></form></div>
+        <div id="inquiry-list" class="cards-grid"></div>
+      </section>
+
+      <section id="audit" class="panel-section last-section" data-page="listing">
+        <div class="section-head"><div><span class="section-kicker">06 / AUDIT TRAIL</span><h2>操作记录</h2><p>导入、修改、审核和状态变更都会保存在本地。</p></div><span class="section-icon">◎</span></div>
+        <div id="audit-list" class="audit-list"></div>
+      </section>
+      <footer data-page="listing">Marketplace 商品上架与询盘跟进工作台 · 本地运行 · 当前浏览器能力以页面状态为准</footer>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/main.js?v=0.3.42"></script>
+</body>
+</html>

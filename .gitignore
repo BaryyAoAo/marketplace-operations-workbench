@@ -1,0 +1,26 @@
+# Runtime state: may contain buyer messages, account metadata and encrypted API keys.
+data/
+.env
+.env.*
+!.env.example
+
+# Local tooling and generated files.
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.npm-cache/
+.screenshot-profile*/
+.demo_screenshot_server.py
+*.log
+
+# Local experiments and generated exports. Keep only the downloadable template.
+outputs/*
+!outputs/product-template/
+outputs/product-template/*
+!outputs/product-template/商品导入模板.xlsx
+tools/
+sample_products.csv
+
+# Historical research notes include local account and machine details.
+docs/*.md
